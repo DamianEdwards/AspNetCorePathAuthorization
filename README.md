@@ -18,7 +18,11 @@ app.UsePathAuthorization(options =>
 });
 ```
 
-See the [samples/SampleSite](samples/SampleSite) project for an example of how to add and configure it.
+See the [samples/SampleSite](samples/SampleSite) project for an example of how to add and configure it. The sample site uses a simple query string based authentication handler so you can send requests like the following to easily simulate different users:
+
+- `/path?name=WorkerPerson`
+- `/path?name=MsManager&role=Managers`
+- `/path?name=admin`
 
 ## Implementation points
 
