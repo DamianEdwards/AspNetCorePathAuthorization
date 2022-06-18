@@ -5,6 +5,11 @@ using System.Text.Encodings.Web;
 
 namespace Microsoft.AspNetCore.Authentication;
 
+/// <summary>
+/// This is NOT a real authentication scheme. Don't ever use it on a real site. It's just
+/// intended to make exploring the *authorization* setup of this sample site easy by allowing
+/// you to specify user details for the request via the query string.
+/// </summary>
 public class QueryAuthScheme : AuthenticationHandler<AuthenticationSchemeOptions>
 {
     public QueryAuthScheme(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder urlEncoder, ISystemClock clock)
