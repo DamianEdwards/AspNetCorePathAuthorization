@@ -54,11 +54,11 @@ public class PathAuthorizationMiddleware
     {
         var endpoint = context.GetEndpoint();
 
-        var (pathPolicy, pathAllowAnonymous) = _pathMapTree.GetPolicyForPath(context.Request.Path);
+        var (policy, allowAnonymous) = _pathMapTree.GetAuthorizationDataForPath(context.Request.Path);
 
-        if (pathPolicy is null)
+        if (policy is null)
         {
-            // No authorization policy to apply
+            // No authorization to apply
             await _next(context);
             return;
         }
@@ -66,8 +66,10 @@ public class PathAuthorizationMiddleware
         // Policy evaluator has transient lifetime so it's fetched from request services instead of injecting in constructor
         var policyEvaluator = context.RequestServices.GetRequiredService<IPolicyEvaluator>();
 
-        var authenticateResult = await policyEvaluator.AuthenticateAsync(pathPolicy, context);
-        if (authenticateResult?.Succeeded ?? false)
+        // Authenticate using the policy schemes
+        var authenticateResult = await policyEvaluator.AuthenticateAsync(policy, context);
+
+        if (authenticateResult.Succeeded)
         {
             if (context.Features.Get<IAuthenticateResultFeature>() is IAuthenticateResultFeature authenticateResultFeature)
             {
@@ -82,7 +84,7 @@ public class PathAuthorizationMiddleware
         }
 
         // Allow Anonymous still wants to run authorization to populate the User but skips any failure/challenge handling
-        if (pathAllowAnonymous || endpoint?.Metadata.GetMetadata<IAllowAnonymous>() != null)
+        if (allowAnonymous || endpoint?.Metadata.GetMetadata<IAllowAnonymous>() != null)
         {
             await _next(context);
             return;
@@ -98,8 +100,8 @@ public class PathAuthorizationMiddleware
             resource = context;
         }
 
-        var authorizeResult = await policyEvaluator.AuthorizeAsync(pathPolicy, authenticateResult!, context, context);
+        var authorizeResult = await policyEvaluator.AuthorizeAsync(policy, authenticateResult, context, resource);
         var authorizationMiddlewareResultHandler = context.RequestServices.GetRequiredService<IAuthorizationMiddlewareResultHandler>();
-        await authorizationMiddlewareResultHandler.HandleAsync(_next, context, pathPolicy, authorizeResult);
+        await authorizationMiddlewareResultHandler.HandleAsync(_next, context, policy, authorizeResult);
     }
 }

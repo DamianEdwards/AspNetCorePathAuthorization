@@ -8,18 +8,28 @@ namespace AspNetCore.Authorization.PathBased;
 /// </summary>
 public class PathAuthorizationOptions
 {
-    private Dictionary<PathString, PathMapDefinitionEntry> PathMapDefinitions { get; } = new();
+    private Dictionary<PathString, PathAuthorizationData> PathMapDefinitions { get; } = new();
 
     /// <summary>
     /// Add an authorization policy for the specified path.
     /// </summary>
     /// <param name="path">The path underneath which the specificied authorization policy should apply.</param>
     /// <param name="configure">A delegate to configure the <see cref="AuthorizationPolicy"/>.</param>
-    public void AddPathPolicy(PathString path, Action<AuthorizationPolicyBuilder> configure)
+    public void AuthorizePath(PathString path)
+    {
+        PathMapDefinitions[path] = new() { Path = path };
+    }
+
+    /// <summary>
+    /// Add an authorization policy for the specified path.
+    /// </summary>
+    /// <param name="path">The path underneath which the specificied authorization policy should apply.</param>
+    /// <param name="configure">A delegate to configure the <see cref="AuthorizationPolicy"/>.</param>
+    public void AuthorizePath(PathString path, Action<AuthorizationPolicyBuilder> configure)
     {
         var pb = new AuthorizationPolicyBuilder();
         configure(pb);
-        AddPathPolicy(path, pb.Build());
+        AuthorizePath(path, pb.Build());
     }
 
     /// <summary>
@@ -27,9 +37,9 @@ public class PathAuthorizationOptions
     /// </summary>
     /// <param name="path">The path underneath which the specificied authorization policy should apply.</param>
     /// <param name="policy">The <see cref="AuthorizationPolicy"/>.</param>
-    public void AddPathPolicy(PathString path, AuthorizationPolicy policy)
+    public void AuthorizePath(PathString path, AuthorizationPolicy policy)
     {
-        PathMapDefinitions[path] = new() { Path = path, PolicyDefinition = new() { Policy = policy } };
+        PathMapDefinitions[path] = new() { Path = path, Policy = policy };
     }
 
     /// <summary>
@@ -37,9 +47,9 @@ public class PathAuthorizationOptions
     /// </summary>
     /// <param name="path">The path underneath which the specificied authorization policy should apply.</param>
     /// <param name="policyName">The name of the <see cref="AuthorizationPolicy"/> that's been configured on <see cref="AuthorizationOptions"/>.</param>
-    public void AddPathPolicy(PathString path, string policyName)
+    public void AuthorizePath(PathString path, string policyName)
     {
-        PathMapDefinitions[path] = new() { Path = path, PolicyDefinition = new() { PolicyName = policyName } };
+        PathMapDefinitions[path] = new() { Path = path, Policy = new NamedPolicyPlaceholder(policyName) };
     }
 
     /// <summary>
@@ -57,9 +67,9 @@ public class PathAuthorizationOptions
     /// </code>
     /// </remarks>
     /// <param name="path">The path underneath which the anonymous users will be allowed.</param>
-    public void AddAllowAnonymousPath(PathString path)
+    public void AllowAnonymousPath(PathString path)
     {
-        PathMapDefinitions[path] = new() { Path = path, AllowAnonymousUsers = true };
+        PathMapDefinitions[path] = new() { Path = path, AllowAnonymous = true };
     }
 
     internal PathMapNode BuildMappingTree(AuthorizationOptions authzOptions)
@@ -68,14 +78,15 @@ public class PathAuthorizationOptions
 
         foreach (var kvp in PathMapDefinitions)
         {
-            var (path, entry) = kvp;
+            var (path, data) = kvp;
 
-            if (entry is null || path.Value is null) continue;
+            if (data is null || path.Value is null) continue;
 
             var segments = path.Value.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
             var currentNode = rootNode;
 
+            // Create/walk-to node
             foreach (var segment in segments)
             {
                 if (currentNode.Children.TryGetValue(segment, out var existingNode))
@@ -90,66 +101,64 @@ public class PathAuthorizationOptions
                 }
             }
 
-            if (!entry.AllowAnonymousUsers)
+            // A node can have a policy but still allow anonymous users as the policy might specify an AuthN scheme
+            currentNode.AllowAnonymous = data.AllowAnonymous;
+            currentNode.Policy = data.Policy switch
             {
-                // Apply policies
-                var resolvedPolicy = entry.PolicyDefinition?.Policy
-                    ?? authzOptions.GetPolicy(entry.PolicyDefinition?.PolicyName!)
-                    ?? throw new InvalidOperationException($"An authorization policy with name '{entry.PolicyDefinition?.PolicyName}' was not found.");
-
-                if (currentNode.DefinedPolicies is null)
-                {
-                    throw new InvalidOperationException("Invalid node state detected while building tree.");
-                }
-
-                currentNode.DefinedPolicies.Add(resolvedPolicy);
-            }
-            else
-            {
-                currentNode.AllowAnonymousUsers = true;
-            }
+                NamedPolicyPlaceholder namedPolicy => authzOptions.GetPolicy(namedPolicy.PolicyName)
+                    ?? throw new InvalidOperationException($"An authorization policy with name '{namedPolicy.PolicyName}' was not found."),
+                { } policy => policy,
+                // TODO: Not sure of the impact of using DefaultPolicy here vs. letting AuthorizationPolicy.CombineAsync do it per-request
+                _ => authzOptions.DefaultPolicy
+            };
         }
 
-        // Walk the finished tree and gather policies to add to leaf nodes
-        var policies = new HashSet<AuthorizationPolicy>();
-        var allowAnonymous = rootNode.AllowAnonymousUsers;
-        GatherLeafNodePolicies(rootNode, policies, ref allowAnonymous);
+        // Walk the finished tree and gather authorization data and set on child nodes
+        GatherNodeData(rootNode, null);
 
         return rootNode;
     }
 
-    private static void GatherLeafNodePolicies(PathMapNode currentNode, HashSet<AuthorizationPolicy> policies, ref bool allowAnonymous)
+    private static void GatherNodeData(PathMapNode currentNode, PathMapNode? parentNode)
     {
-        if (!allowAnonymous && currentNode.DefinedPolicies is { } currentNodePolicies)
+        if (currentNode.Policy is null)
         {
-            // Add current node policies to gathered policies
-            foreach (var policy in currentNodePolicies)
-            {
-                policies.Add(policy);
-            }
+            // Copy authorize data from parent node
+            currentNode.Policy = parentNode?.Policy;
+            currentNode.AllowAnonymous = parentNode?.AllowAnonymous ?? false;
         }
-        else
+        else if (currentNode.Policy is not null && parentNode?.Policy is not null)
         {
-            // Anonymous users allowed, clear gathered policies
-            policies.Clear();
-        }
-
-        // Collapse current node's policies
-        if (policies.Count > 0)
-        {
-            currentNode.CombinedPolicy = AuthorizationPolicy.Combine(policies);
-            currentNode.DefinedPolicies?.Clear();
-            currentNode.DefinedPolicies = null;
+            // Combine with parent policy
+            // TODO: Not sure about the impact of combining here vs. doing it per-request with CombineAsync
+            currentNode.Policy = AuthorizationPolicy.Combine(parentNode.Policy, currentNode.Policy);
         }
 
         // Visit children
         foreach (var kvp in currentNode.Children)
         {
-            var (_, node) = kvp;
-            GatherLeafNodePolicies(node, policies, ref allowAnonymous);
+            var (_, childNode) = kvp;
+            GatherNodeData(childNode, currentNode);
+        }
+    }
+
+    private class NamedPolicyPlaceholder : AuthorizationPolicy
+    {
+        private static readonly PlaceholderRequirement[] _requirements = new[] { new PlaceholderRequirement() };
+
+        public NamedPolicyPlaceholder(string policyName)
+            : base(_requirements, Enumerable.Empty<string>())
+        {
+            PolicyName = policyName;
         }
 
-        policies.Clear();
-        allowAnonymous = false;
+        public string PolicyName { get; }
+
+        public override string ToString() => $"NamedPolicyPlaceholder.PolicyName = {PolicyName}";
+    }
+
+    private class PlaceholderRequirement : IAuthorizationRequirement
+    {
+        
     }
 }

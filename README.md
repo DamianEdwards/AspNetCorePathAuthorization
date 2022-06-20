@@ -6,27 +6,36 @@ ASP.NET Core's authorization system is based on metadata associated with routing
 
 Example usage:
 
-```c#
+```csharp
 app.UseAuthentication();
 app.UseAuthorization();
 app.UsePathAuthorization(options =>
 {
-    options.AddPathPolicy("/users", "AuthenticatedUsers");
-    options.AddPathPolicy("/management", "Managers");
-    options.AddAllowAnonymousPath("/management/feedback");
-    options.AddPathPolicy("/admin", "AdminsOnly");
+    // Authorize using default policy
+    options.AuthorizePath("/users");
+    // Authorize using inline-defined policy
+    options.AuthorizePath("/management", policy =>
+        policy.RequireAuthenticatedUser()
+              .RequireRole("Managers"));
+    // Allow anonymous users under a sub-path of an authorized path
+    options.AllowAnonymousPath("/management/feedback");
+    // Authorize using named policy
+    options.AuthorizePath("/admin", "AdminsOnly");
 });
 ```
 
 See the [samples/SampleSite](samples/SampleSite) project for an example of how to add and configure it. The sample site uses a simple query string based authentication handler so you can send requests like the following to easily simulate different users:
 
-- `/path?name=WorkerPerson`
-- `/path?name=MsManager&role=Managers`
-- `/path?name=admin`
+- `/users?name=WorkerPerson`
+- `/users/ForUsersOnly.html?name=WorkerPerson`
+- `/management?name=MsManager&role=Managers`
+- `/management/feedback`
+- `/management/feedback?name=WorkerPerson`
+- `/admin?name=admin`
+- `/admin?name=MsManager`
 
 ## Implementation points
 
-- Currently, protecting a path requires setting a policy (i.e. there's no support for `AuthorizationOptions.DefaultPolicy` yet)
 - Sub-paths of protected paths can allow anonymous users, e.g. `/management/feedback` in the example above
 - Endpoints that exist under protected paths can opt-in to allow anonymous users in the normal way and that will be honored
 - This middleware only evaluates path-based authorization rules and thus should be used in conjunction with ASP.NET Core's included authorization middleware (i.e. you should still call `app.UseAuthorization()`)

@@ -6,16 +6,9 @@ builder.Services.AddAuthentication("QueryAuth")
     .AddScheme<AuthenticationSchemeOptions, QueryAuthScheme>("QueryAuth", options => { });
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("AuthenticatedUsers", policy =>
-        policy.RequireAuthenticatedUser());
-
-    options.AddPolicy("Managers", policy =>
-        policy.RequireAuthenticatedUser()
-            .RequireRole("Managers"));
-
     options.AddPolicy("AdminsOnly", policy =>
         policy.RequireAuthenticatedUser()
-            .RequireClaim("IsAdmin"));
+              .RequireUserName("admin"));
 });
 
 var app = builder.Build();
@@ -26,10 +19,16 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UsePathAuthorization(options =>
 {
-    options.AddPathPolicy("/users", "AuthenticatedUsers");
-    options.AddPathPolicy("/management", "Managers");
-    options.AddAllowAnonymousPath("/management/feedback");
-    options.AddPathPolicy("/admin", "AdminsOnly");
+    // Authorize using default policy
+    options.AuthorizePath("/users");
+    // Authorize using inline-defined policy
+    options.AuthorizePath("/management", policy =>
+        policy.RequireAuthenticatedUser()
+              .RequireRole("Managers"));
+    // Allow anonymous users under a sub-path of an authorized path
+    options.AllowAnonymousPath("/management/feedback");
+    // Authorize using named policy
+    options.AuthorizePath("/admin", "AdminsOnly");
 });
 
 app.UseStaticFiles();
@@ -38,7 +37,7 @@ app.MapGet("/", () => "Hello World!");
 app.MapGet("/users", (HttpContext context) => $"Hello {context.User.Identity?.Name ?? "[unknown]"}!");
 app.MapGet("/management", () => $"Management portal");
 app.MapGet("/management/{job}", (string job) => $"Management is busy doing the following job: {job}");
-app.MapGet("/management/feedback", () => $"Thanks for your feedback");
+app.MapGet("/management/feedback", (HttpContext context) => $"Thanks for your feedback {context.User.Identity?.Name}");
 app.MapGet("/admin", () => $"Admin portal");
 app.MapGet("/admin/{action}", (string action) => $"Only admins can {action} and you're an admin so you can {action}.");
 

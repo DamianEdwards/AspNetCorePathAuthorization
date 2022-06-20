@@ -7,39 +7,11 @@ namespace AspNetCore.Authorization.PathBased;
 internal class PathMapNode
 {
     public string PathSegment { get; init; } = default!;
-
     public Dictionary<string, PathMapNode> Children { get; } = new();
+    public AuthorizationPolicy? Policy { get; set; }
+    public bool AllowAnonymous { get; set; }
 
-    public HashSet<AuthorizationPolicy>? DefinedPolicies { get; set; } = new();
-
-    public AuthorizationPolicy? CombinedPolicy { get; set; }
-
-    public bool AllowAnonymousUsers { get; set; }
-
-    public override string ToString()
-    {
-        var sb = new StringBuilder();
-
-        sb.Append($"PathSegment = {PathSegment}");
-        sb.Append($", Children = {Children.Count}");
-
-        if (AllowAnonymousUsers)
-        {
-            sb.Append(", AllowAnonymousUsers = true");
-        }
-        else if (DefinedPolicies is not null)
-        {
-            sb.Append($", DefinedPolicies = {DefinedPolicies.Count}");
-        }
-        else if (CombinedPolicy is not null)
-        {
-            sb.Append($", CombinedPolicy = {CombinedPolicy}");
-        }
-
-        return sb.ToString();
-    }
-
-    public (AuthorizationPolicy?, bool) GetPolicyForPath(PathString path)
+    public (AuthorizationPolicy?, bool) GetAuthorizationDataForPath(PathString path)
     {
         if (path.Value is null) return (null, false);
 
@@ -54,6 +26,25 @@ internal class PathMapNode
             }
         }
 
-        return (currentNode.CombinedPolicy, currentNode.AllowAnonymousUsers);
+        return (currentNode.Policy, currentNode.AllowAnonymous);
+    }
+
+    public override string ToString()
+    {
+        var sb = new StringBuilder();
+
+        sb.Append($"PathSegment = {PathSegment}");
+        sb.Append($", Children = {Children.Count}");
+
+        if (AllowAnonymous)
+        {
+            sb.Append(", AllowAnonymous = true");
+        }
+        else if (Policy is not null)
+        {
+            sb.Append($", Policy = {Policy}");
+        }
+
+        return sb.ToString();
     }
 }
