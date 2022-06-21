@@ -6,8 +6,6 @@ namespace AspNetCore.Authorization.PathBased;
 
 internal class PathAuthorizationData
 {
-    public static PathAuthorizationData Empty { get; } = new();
-
     public PathString Path { get; init; }
     public AuthorizationPolicy? Policy { get; set; }
     public bool AllowAnonymous { get; set; }
