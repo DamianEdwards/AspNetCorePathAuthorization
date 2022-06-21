@@ -20,6 +20,20 @@ public class PathAuthorizationOptionsTests
 
     [Theory]
     [MemberData(nameof(GetPathList))]
+    public void BuildMappingTree_AppliesDefaultsToPathNotRegisteredForAuthorization(string path)
+    {
+        var authzOptions = new AuthorizationOptions();
+        var options = new PathAuthorizationOptions();
+
+        var root = options.BuildMappingTree(authzOptions);
+        var (policy, allowAnonymous) = root.GetAuthorizationDataForPath(path);
+
+        Assert.Null(policy);
+        Assert.False(allowAnonymous);
+    }
+
+    [Theory]
+    [MemberData(nameof(GetPathList))]
     public void BuildMappingTree_UsesDefaultPolicy(string path)
     {
         var authzOptions = new AuthorizationOptions();
@@ -222,5 +236,25 @@ public class PathAuthorizationOptionsTests
         Assert.NotNull(parentPolicy);
         Assert.Equal(1, parentPolicy!.Requirements.Count);
         Assert.Equal(2, childPolicy!.Requirements.Count);
+    }
+
+    [Fact]
+    public void BuildMappingTree_SubPaths_CanOverridAllowAnonymousFromAncestors()
+    {
+        var authzOptions = new AuthorizationOptions();
+        var options = new PathAuthorizationOptions();
+
+        options.AuthorizePath("/grandparent");
+        options.AllowAnonymousPath("/grandparent/parent/child");
+
+        var root = options.BuildMappingTree(authzOptions);
+        var (rootPolicy, _) = root.GetAuthorizationDataForPath("/");
+        var (parentPolicy, _) = root.GetAuthorizationDataForPath("/grandparent/parent");
+        var (childPolicy, childAllowAnonymous) = root.GetAuthorizationDataForPath("/grandparent/parent/child");
+
+        Assert.Null(rootPolicy);
+        Assert.NotNull(parentPolicy);
+        Assert.NotNull(childPolicy);
+        Assert.True(childAllowAnonymous);
     }
 }
