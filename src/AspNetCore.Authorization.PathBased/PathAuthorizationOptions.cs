@@ -11,7 +11,7 @@ public class PathAuthorizationOptions
     private Dictionary<PathString, PathAuthorizationData> PathMapDefinitions { get; } = new();
 
     /// <summary>
-    /// Add an authorization policy for the specified path.
+    /// Require authorization for the specified path.
     /// </summary>
     /// <param name="path">The path underneath which the specificied authorization policy should apply.</param>
     /// <param name="configure">A delegate to configure the <see cref="AuthorizationPolicy"/>.</param>
@@ -21,7 +21,7 @@ public class PathAuthorizationOptions
     }
 
     /// <summary>
-    /// Add an authorization policy for the specified path.
+    /// Require authorization with a specific policy for the specified path.
     /// </summary>
     /// <param name="path">The path underneath which the specificied authorization policy should apply.</param>
     /// <param name="configure">A delegate to configure the <see cref="AuthorizationPolicy"/>.</param>
@@ -33,7 +33,7 @@ public class PathAuthorizationOptions
     }
 
     /// <summary>
-    /// Add an authorization policy for the specified path.
+    /// Require authorization with a specific policy for the specified path.
     /// </summary>
     /// <param name="path">The path underneath which the specificied authorization policy should apply.</param>
     /// <param name="policy">The <see cref="AuthorizationPolicy"/>.</param>
@@ -43,7 +43,7 @@ public class PathAuthorizationOptions
     }
 
     /// <summary>
-    /// Add an authorization policy for the specified path.
+    /// Require authorization with a specific policy for the specified path.
     /// </summary>
     /// <param name="path">The path underneath which the specificied authorization policy should apply.</param>
     /// <param name="policyName">The name of the <see cref="AuthorizationPolicy"/> that's been configured on <see cref="AuthorizationOptions"/>.</param>
@@ -53,16 +53,16 @@ public class PathAuthorizationOptions
     }
 
     /// <summary>
-    /// Add a path to allow anonymous users under.
+    /// Allow anonymous users under the specified path.
     /// </summary>
     /// <remarks>
     /// Sub-paths can still define their own policies to deny anonymous user access, e.g.
     /// <code>
-    /// /           &lt;- No authorization policies defined
+    /// /           &lt;- No authorization defined
     ///   /a        &lt;- Requires authorization
     ///     /b      &lt;- Allows anonymous users
     ///       /c    &lt;- Requires authorization
-    ///         /d  &lt;- Inherits authorization policies from c
+    ///         /d  &lt;- Inherits authorization from c
     ///       /e    &lt;- Inherits allow anonymous users from b
     /// </code>
     /// </remarks>
