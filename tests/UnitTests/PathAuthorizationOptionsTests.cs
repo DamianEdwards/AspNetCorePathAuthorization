@@ -18,6 +18,34 @@ public class PathAuthorizationOptionsTests
         new[] { "/d/c/b/a" },
     };
 
+    [Fact]
+    public void BuildMappingTree_CreatesOneNodePerLogicalChild()
+    {
+        var authzOptions = new AuthorizationOptions();
+        var options = new PathAuthorizationOptions();
+
+        options.AuthorizePath("/");
+        options.AuthorizePath("/a");
+        options.AuthorizePath("/a/b");
+        options.AuthorizePath("/a/c");
+        options.AuthorizePath("/a/c/c1");
+        options.AuthorizePath("/a/c/c2");
+        options.AuthorizePath("/a/c/c3");
+        options.AuthorizePath("/d");
+        options.AuthorizePath("/e");
+        options.AuthorizePath("/f");
+
+        var root = options.BuildMappingTree(authzOptions);
+        var a = root.Children["a"];
+        var b = a.Children["b"];
+        var c = a.Children["c"];
+
+        Assert.Equal(4, root.Children.Count);
+        Assert.Equal(2, a.Children.Count);
+        Assert.Empty(b.Children);
+        Assert.Equal(3, c.Children.Count);
+    }
+
     [Theory]
     [MemberData(nameof(GetPathList))]
     public void BuildMappingTree_AppliesDefaultsToPathNotRegisteredForAuthorization(string path)
