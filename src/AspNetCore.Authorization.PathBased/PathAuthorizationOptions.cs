@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Razor.TagHelpers;
 
 namespace AspNetCore.Authorization.PathBased;
 
@@ -8,7 +9,7 @@ namespace AspNetCore.Authorization.PathBased;
 /// </summary>
 public class PathAuthorizationOptions
 {
-    private Dictionary<PathString, PathAuthorizationData> PathMapDefinitions { get; } = new();
+    private readonly Dictionary<PathString, PathAuthorizeData> _authzData = new();
 
     /// <summary>
     /// Require authorization for the specified path.
@@ -17,9 +18,10 @@ public class PathAuthorizationOptions
     /// <param name="configure">A delegate to configure the <see cref="AuthorizationPolicy"/>.</param>
     public void AuthorizePath(PathString path)
     {
-        PathMapDefinitions[path] = new() { Path = path };
+        _authzData[path] = new();
     }
 
+#if NET7_0_OR_GREATER
     /// <summary>
     /// Require authorization with a specific policy for the specified path.
     /// </summary>
@@ -29,7 +31,8 @@ public class PathAuthorizationOptions
     {
         var pb = new AuthorizationPolicyBuilder();
         configure(pb);
-        AuthorizePath(path, pb.Build());
+        var policy = pb.Build();
+        _authzData[path] = new(policy);
     }
 
     /// <summary>
@@ -39,8 +42,9 @@ public class PathAuthorizationOptions
     /// <param name="policy">The <see cref="AuthorizationPolicy"/>.</param>
     public void AuthorizePath(PathString path, AuthorizationPolicy policy)
     {
-        PathMapDefinitions[path] = new() { Path = path, Policy = policy };
+        _authzData[path] = new(policy);
     }
+#endif
 
     /// <summary>
     /// Require authorization with a specific policy for the specified path.
@@ -49,7 +53,27 @@ public class PathAuthorizationOptions
     /// <param name="policyName">The name of the <see cref="AuthorizationPolicy"/> that's been configured on <see cref="AuthorizationOptions"/>.</param>
     public void AuthorizePath(PathString path, string policyName)
     {
-        PathMapDefinitions[path] = new() { Path = path, Policy = new NamedPolicyPlaceholder(policyName) };
+        _authzData[path] = new(policyName);
+    }
+
+    /// <summary>
+    /// Require authorization with specific roles for the specified path.
+    /// </summary>
+    /// <param name="path">The path underneath which the specificied authorization policy should apply.</param>
+    /// <param name="roles">A comma delimited list of roles that are allowed to access the path.</param>
+    public void AuthorizePathRoles(PathString path, string roles)
+    {
+        _authzData[path] = new() { Roles = roles };
+    }
+
+    /// <summary>
+    /// Require authorization with a specific policy for the specified path.
+    /// </summary>
+    /// <param name="path">The path underneath which the specificied authorization policy should apply.</param>
+    /// <param name="policyName">The name of the <see cref="AuthorizationPolicy"/> that's been configured on <see cref="AuthorizationOptions"/>.</param>
+    public void AuthorizePath(PathString path, IAuthorizeData data)
+    {
+        _authzData[path] = new(data);
     }
 
     /// <summary>
@@ -69,14 +93,14 @@ public class PathAuthorizationOptions
     /// <param name="path">The path underneath which the anonymous users will be allowed.</param>
     public void AllowAnonymousPath(PathString path)
     {
-        PathMapDefinitions[path] = new() { Path = path, AllowAnonymous = true };
+        _authzData[path] = new() { AllowAnonymous = true };
     }
 
-    internal PathMapNode BuildMappingTree(AuthorizationOptions authzOptions)
+    internal PathMapNode BuildMappingTree(DefaultAuthorizationPolicyProvider? policyProvider = null)
     {
-        var rootNode = new PathMapNode { PathSegment = "/" };
+        var rootNode = new PathMapNode();
 
-        foreach (var kvp in PathMapDefinitions)
+        foreach (var kvp in _authzData)
         {
             var (path, data) = kvp;
 
@@ -95,70 +119,79 @@ public class PathAuthorizationOptions
                 }
                 else
                 {
-                    var childNode = new PathMapNode { PathSegment = segment };
+                    var childNode = new PathMapNode();
                     currentNode.Children.Add(segment, childNode);
                     currentNode = childNode;
                 }
             }
 
             // A node can have a policy but still allow anonymous users as the policy might specify an AuthN scheme
-            currentNode.AllowAnonymous = data.AllowAnonymous;
-            currentNode.Policy = data.Policy switch
-            {
-                NamedPolicyPlaceholder namedPolicy => authzOptions.GetPolicy(namedPolicy.PolicyName)
-                    ?? throw new InvalidOperationException($"An authorization policy with name '{namedPolicy.PolicyName}' was not found."),
-                { } policy => policy,
-                // TODO: Not sure of the impact of using DefaultPolicy here vs. letting AuthorizationPolicy.CombineAsync do it per-request
-                _ => authzOptions.DefaultPolicy
-            };
+            currentNode.AuthorizeData.Add(data);
+            currentNode.AllowAnonymous |= data.AllowAnonymous;
+#if NET7_0_OR_GREATER
+            currentNode.Policy = data.PolicyInstance;
+#endif
         }
 
         // Walk the finished tree and gather authorization data and set on child nodes
-        GatherNodeData(rootNode, null);
+        GatherNodeData(rootNode, null, policyProvider);
+        _wrapperParentPolicyArray = null;
 
         return rootNode;
     }
 
-    private static void GatherNodeData(PathMapNode currentNode, PathMapNode? parentNode)
+    private static AuthorizationPolicy[]? _wrapperParentPolicyArray;
+
+    private static void GatherNodeData(PathMapNode currentNode, PathMapNode? parentNode, DefaultAuthorizationPolicyProvider? policyProvider)
     {
-        if (currentNode.Policy is null)
+        _wrapperParentPolicyArray ??= new AuthorizationPolicy[1];
+
+#if NET7_0_OR_GREATER
+        if (!currentNode.AllowAnonymous.HasValue && currentNode.AuthorizeData.Count == 0 && currentNode.Policy is null && parentNode?.AllowAnonymous.HasValue == true)
+#else
+        if (!currentNode.AllowAnonymous.HasValue && currentNode.AuthorizeData.Count == 0 && parentNode?.AllowAnonymous.HasValue == true)
+#endif
+        {
+            // Inherit allow anonymous from parent
+            currentNode.AllowAnonymous = true;
+        }
+
+        if (parentNode?.AuthorizeData.Count > 0)
         {
             // Copy authorize data from parent node
-            currentNode.Policy = parentNode?.Policy;
-            currentNode.AllowAnonymous = parentNode?.AllowAnonymous ?? false;
+            currentNode.AuthorizeData.AddRange(parentNode.AuthorizeData);
         }
-        else if (currentNode.Policy is not null && parentNode?.Policy is not null)
+
+        if (currentNode.Policy is null && policyProvider is not null)
         {
-            // Combine with parent policy
-            // TODO: Not sure about the impact of combining here vs. doing it per-request with CombineAsync
-            currentNode.Policy = AuthorizationPolicy.Combine(parentNode.Policy, currentNode.Policy);
+            // The default authorization policy is synchronous and always returns the same result for the same input so we can cache the policy here
+#if NET7_0_OR_GREATER
+            // Setup parent policy instance
+            IEnumerable<AuthorizationPolicy> parentPolicy;
+            if (parentNode?.Policy is not null)
+            {
+                _wrapperParentPolicyArray![0] = parentNode.Policy;
+                parentPolicy = _wrapperParentPolicyArray;
+            }
+            else
+            {
+                parentPolicy = Enumerable.Empty<AuthorizationPolicy>();
+            }
+
+            currentNode.Policy = AuthorizationPolicy.CombineAsync(policyProvider, currentNode.AuthorizeData, parentPolicy).GetAwaiter().GetResult();
+
+            // Policy is combined now so we can clear out the data, children will combine with the policy instance
+            currentNode.AuthorizeData.Clear();
+#else
+            currentNode.Policy = AuthorizationPolicy.CombineAsync(policyProvider, currentNode.AuthorizeData).GetAwaiter().GetResult();
+#endif
         }
 
         // Visit children
         foreach (var kvp in currentNode.Children)
         {
             var (_, childNode) = kvp;
-            GatherNodeData(childNode, currentNode);
+            GatherNodeData(childNode, currentNode, policyProvider);
         }
-    }
-
-    private class NamedPolicyPlaceholder : AuthorizationPolicy
-    {
-        private static readonly PlaceholderRequirement[] _requirements = new[] { new PlaceholderRequirement() };
-
-        public NamedPolicyPlaceholder(string policyName)
-            : base(_requirements, Enumerable.Empty<string>())
-        {
-            PolicyName = policyName;
-        }
-
-        public string PolicyName { get; }
-
-        public override string ToString() => $"NamedPolicyPlaceholder.PolicyName = {PolicyName}";
-    }
-
-    private class PlaceholderRequirement : IAuthorizationRequirement
-    {
-        
     }
 }

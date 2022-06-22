@@ -21,10 +21,15 @@ app.UsePathAuthorization(options =>
 {
     // Authorize using default policy
     options.AuthorizePath("/users");
+#if NET7_0_OR_GREATER
     // Authorize using inline-defined policy
     options.AuthorizePath("/management", policy =>
         policy.RequireAuthenticatedUser()
               .RequireRole("Managers"));
+#else
+    // Authorize using role names
+    options.AuthorizePathRoles("/management", "Managers");
+#endif
     // Allow anonymous users under a sub-path of an authorized path
     options.AllowAnonymousPath("/management/feedback");
     // Authorize using named policy

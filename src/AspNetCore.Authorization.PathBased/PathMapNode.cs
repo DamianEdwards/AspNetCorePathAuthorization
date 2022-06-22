@@ -6,14 +6,19 @@ namespace AspNetCore.Authorization.PathBased;
 
 internal class PathMapNode
 {
-    public string PathSegment { get; init; } = default!;
-    public Dictionary<string, PathMapNode> Children { get; } = new();
-    public AuthorizationPolicy? Policy { get; set; }
-    public bool AllowAnonymous { get; set; }
+    private static readonly IReadOnlyList<PathAuthorizeData> _emptyData = new List<PathAuthorizeData>();
 
-    public (AuthorizationPolicy?, bool) GetAuthorizationDataForPath(PathString path)
+    public Dictionary<string, PathMapNode> Children { get; } = new();
+
+    public List<PathAuthorizeData> AuthorizeData { get; } = new();
+
+    public AuthorizationPolicy? Policy { get; set; }
+
+    public bool? AllowAnonymous { get; set; }
+
+    public (IReadOnlyList<PathAuthorizeData>, AuthorizationPolicy?, bool?) GetAuthorizeDataForPath(PathString path)
     {
-        if (path.Value is null) return (null, false);
+        if (path.Value is null) return (_emptyData, null, null);
 
         var segments = path.Value.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var currentNode = this;
@@ -26,23 +31,22 @@ internal class PathMapNode
             }
         }
 
-        return (currentNode.Policy, currentNode.AllowAnonymous);
+        return (currentNode.AuthorizeData, currentNode.Policy, currentNode.AllowAnonymous);
     }
 
     public override string ToString()
     {
         var sb = new StringBuilder();
 
-        sb.Append($"PathSegment = {PathSegment}");
-        sb.Append($", Children = {Children.Count}");
+        sb.Append($"Children = {Children.Count}");
 
-        if (AllowAnonymous)
+        if (AllowAnonymous == true)
         {
             sb.Append(", AllowAnonymous = true");
         }
-        else if (Policy is not null)
+        else if (AuthorizeData.Count > 0)
         {
-            sb.Append($", Policy = {Policy}");
+            sb.Append($", AuthorizeData.Count = {AuthorizeData.Count}");
         }
 
         return sb.ToString();
