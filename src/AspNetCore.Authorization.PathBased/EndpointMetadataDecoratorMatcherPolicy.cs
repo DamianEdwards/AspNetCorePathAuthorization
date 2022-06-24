@@ -19,11 +19,6 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
 
     public Task ApplyAsync(HttpContext httpContext, CandidateSet candidates)
     {
-        if (candidates.Count == 1)
-        {
-            return Task.CompletedTask;
-        }
-
         // Try to retrieve decorated endpoint from cache
         for (int i = 0; i < candidates.Count; i++)
         {
@@ -74,31 +69,34 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
 
         if (activeEndpoint is not null)
         {
-            var newEndpoint = new RouteEndpointBuilder(activeEndpoint.RequestDelegate!, activeEndpoint.RoutePattern, activeEndpoint.Order);
+            Endpoint? replacementEndpoint = null;
 
-            foreach (var endpoint in policyEndpoints)
-            {
-                foreach (var metadata in endpoint.Metadata)
-                {
-                    if (metadata is not null)
-                    {
-                        newEndpoint.Metadata.Add(metadata);
-                    }
-                }
-            }
+            var decoratedMetadata = policyEndpoints.SelectMany(e => e.Metadata).ToList();
 
             if (actualCandidateCount == 1)
             {
+                var routeEndpointBuilder = new RouteEndpointBuilder(activeEndpoint.RequestDelegate!, activeEndpoint.RoutePattern, activeEndpoint.Order);
+
+                foreach (var metadata in decoratedMetadata)
+                {
+                    routeEndpointBuilder.Metadata.Add(metadata);
+                }
+
                 foreach (var metadata in activeEndpoint.Metadata)
                 {
                     if (metadata is not null)
                     {
-                        newEndpoint.Metadata.Add(metadata);
+                        routeEndpointBuilder.Metadata.Add(metadata);
                     }
                 }
+
+                replacementEndpoint = routeEndpointBuilder.Build();
+            }
+            else
+            {
+                replacementEndpoint = new MetadataOnlyEndpoint(activeEndpoint, decoratedMetadata);
             }
 
-            var replacementEndpoint = newEndpoint.Build();
             _endpointsCache.Add(activeEndpoint, replacementEndpoint);
 
             var values = actualCandidateCount == 1 ? actualCandidate.Values : null;
