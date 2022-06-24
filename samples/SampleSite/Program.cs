@@ -21,6 +21,7 @@ app.UseStatusCodePages();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// The following block demonstrates how to use the middleware approach
 //app.UsePathAuthorization(options =>
 //{
 //    // Authorize using default policy
