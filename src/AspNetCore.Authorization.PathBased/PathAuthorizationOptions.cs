@@ -15,7 +15,6 @@ public class PathAuthorizationOptions
     /// Require authorization for the specified path.
     /// </summary>
     /// <param name="path">The path underneath which the specificied authorization policy should apply.</param>
-    /// <param name="configure">A delegate to configure the <see cref="AuthorizationPolicy"/>.</param>
     public void AuthorizePath(PathString path)
     {
         _authzData[path] = new();
@@ -50,10 +49,10 @@ public class PathAuthorizationOptions
     /// Require authorization with a specific policy for the specified path.
     /// </summary>
     /// <param name="path">The path underneath which the specificied authorization policy should apply.</param>
-    /// <param name="policyName">The name of the <see cref="AuthorizationPolicy"/> that's been configured on <see cref="AuthorizationOptions"/>.</param>
-    public void AuthorizePath(PathString path, string policyName)
+    /// <param name="policy">The name of the <see cref="AuthorizationPolicy"/> to use when authorizing access to this path.</param>
+    public void AuthorizePath(PathString path, string policy)
     {
-        _authzData[path] = new(policyName);
+        _authzData[path] = new(policy);
     }
 
     /// <summary>
