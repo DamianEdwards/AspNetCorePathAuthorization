@@ -22,11 +22,24 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
 
     public Task ApplyAsync(HttpContext httpContext, CandidateSet candidates)
     {
-        // Try to retrieve decorated endpoint from cache
-        for (int i = 0; i < candidates.Count; i++)
+        var firstCandidate = candidates[0];
+        Endpoint? cachedEndpoint;
+        // Try to find cache entry for first candidate
+        if (_endpointsCache.TryGetValue(firstCandidate.Endpoint, out cachedEndpoint))
+        {
+            // Only use the current request's route values if the candidate match is an actual endpoint
+            var values = !ReferenceEquals(firstCandidate.Endpoint.RequestDelegate, NoOpRequestDelegate)
+                ? firstCandidate.Values
+                : null;
+            candidates.ReplaceEndpoint(0, cachedEndpoint, values);
+            return Task.CompletedTask;
+        }
+
+        // Fallback to looping through remaining candiates
+        for (int i = 1; i < candidates.Count; i++)
         {
             var candidate = candidates[i];
-            if (_endpointsCache.TryGetValue(candidate.Endpoint, out var cachedEndpoint))
+            if (_endpointsCache.TryGetValue(candidate.Endpoint, out cachedEndpoint))
             {
                 // Only use the current request's route values if the candidate match is an actual endpoint
                 var values = !ReferenceEquals(candidate.Endpoint.RequestDelegate, NoOpRequestDelegate)
