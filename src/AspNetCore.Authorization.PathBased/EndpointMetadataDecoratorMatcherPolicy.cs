@@ -16,7 +16,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
 
     public bool AppliesToEndpoints(IReadOnlyList<Endpoint> endpoints)
     {
-        return endpoints.Any(e => RequestDelegate.ReferenceEquals(e.RequestDelegate, NoOpRequestDelegate)
+        return endpoints.Any(e => ReferenceEquals(e.RequestDelegate, NoOpRequestDelegate)
             && e.Metadata.GetMetadata<MetadataOnlyEndpointMetadata>() != null);
     }
 
@@ -29,7 +29,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             if (_endpointsCache.TryGetValue(candidate.Endpoint, out var cachedEndpoint))
             {
                 // Only use the current request's route values if the candidate match is an actual endpoint
-                var values = !RequestDelegate.ReferenceEquals(candidate.Endpoint.RequestDelegate, NoOpRequestDelegate)
+                var values = !ReferenceEquals(candidate.Endpoint.RequestDelegate, NoOpRequestDelegate)
                     ? candidate.Values
                     : null;
                 candidates.ReplaceEndpoint(i, cachedEndpoint, values);
@@ -47,7 +47,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
         {
             var candidate = candidates[i];
 
-            if (RequestDelegate.ReferenceEquals(candidate.Endpoint.RequestDelegate, NoOpRequestDelegate))
+            if (ReferenceEquals(candidate.Endpoint.RequestDelegate, NoOpRequestDelegate))
             {
                 metadataOnlyEndpoints ??= new();
                 metadataOnlyEndpoints.Add(candidate.Endpoint);
