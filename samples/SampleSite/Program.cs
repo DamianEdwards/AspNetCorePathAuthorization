@@ -62,5 +62,3 @@ app.MapGet("/admin", () => $"Admin portal");
 app.MapGet("/admin/{action}", (string action) => $"Only admins can {action} and you're an admin so you can {action}.");
 
 app.Run();
-
-class MyMetadata { }
