@@ -38,7 +38,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
         }
 
         // Not found in cache so build up the replacement endpoint
-        List<Endpoint>? policyEndpoints = null;
+        List<Endpoint>? metadataOnlyEndpoints = null;
         CandidateState actualCandidate = default;
         var replacementCandidateIndex = -1;
         var actualCandidateCount = 0;
@@ -49,12 +49,17 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
 
             if (candidate.Endpoint.RequestDelegate == NoOpRequestDelegate)
             {
-                candidates.SetValidity(i, false);
-                policyEndpoints ??= new();
-                policyEndpoints.Add(candidate.Endpoint);
+                metadataOnlyEndpoints ??= new();
+                metadataOnlyEndpoints.Add(candidate.Endpoint);
                 if (actualCandidateCount == 0)
                 {
                     replacementCandidateIndex = i;
+
+                    // TODO: Review necessisty of setting candidate validity (doesn't seem to matter?)
+                    //if (i < (candidates.Count - 1))
+                    //{
+                    //    candidates.SetValidity(i, false);
+                    //}
                 }
             }
             else
@@ -65,7 +70,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             }
         }
 
-        Debug.Assert(policyEndpoints?.Count >= 1);
+        Debug.Assert(metadataOnlyEndpoints?.Count >= 1);
         Debug.Assert(replacementCandidateIndex >= 0);
 
         var activeEndpoint = actualCandidateCount switch
@@ -75,11 +80,13 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             _ => null
         };
 
+        // TODO: Review what the correct behavior is if there is more than 1 actual candidate
+
         if (activeEndpoint is not null)
         {
             Endpoint? replacementEndpoint = null;
 
-            var decoratedMetadata = policyEndpoints.SelectMany(e => e.Metadata).ToList();
+            var decoratedMetadata = metadataOnlyEndpoints.SelectMany(e => e.Metadata).ToList();
 
             if (actualCandidateCount == 1)
             {
@@ -112,7 +119,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             var values = actualCandidateCount == 1 ? actualCandidate.Values : null;
 
             candidates.ReplaceEndpoint(replacementCandidateIndex, replacementEndpoint, values);
-            candidates.SetValidity(replacementCandidateIndex, true);
+            //candidates.SetValidity(replacementCandidateIndex, true);
         }
 
         return Task.CompletedTask;
