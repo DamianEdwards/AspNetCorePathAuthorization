@@ -20,7 +20,7 @@ public static class EndpointMetadataDecoratorsApplicationBuilderExtensions
     {
         var _ = endpoints.ServiceProvider.GetRequiredService<MetadataOnlyEndpointMetadata>();
 
-        return endpoints.Map(pattern, static (ctx) => { return Task.CompletedTask; })
+        return endpoints.Map(pattern, EndpointMetadataDecoratorMatcherPolicy.NoOpRequestDelegate)
             .WithMetadata(new MetadataOnlyEndpointMetadata())
             .WithMetadata(items);
     }

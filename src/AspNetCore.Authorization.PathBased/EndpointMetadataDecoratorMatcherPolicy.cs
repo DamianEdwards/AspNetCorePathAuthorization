@@ -10,11 +10,14 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
 {
     private readonly ConditionalWeakTable<Endpoint, Endpoint> _endpointsCache = new();
 
+    internal static readonly RequestDelegate NoOpRequestDelegate = (ctx) => Task.CompletedTask;
+
     public override int Order { get; }
 
     public bool AppliesToEndpoints(IReadOnlyList<Endpoint> endpoints)
     {
-        return endpoints.Any(e => e.Metadata.GetMetadata<MetadataOnlyEndpointMetadata>() != null);
+        return endpoints.Any(e => e.RequestDelegate == NoOpRequestDelegate
+            && e.Metadata.GetMetadata<MetadataOnlyEndpointMetadata>() != null);
     }
 
     public Task ApplyAsync(HttpContext httpContext, CandidateSet candidates)
@@ -26,7 +29,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             if (_endpointsCache.TryGetValue(candidate.Endpoint, out var cachedEndpoint))
             {
                 // Only use the current request's route values if the candidate match is an actual endpoint
-                var values = candidate.Endpoint.Metadata.GetMetadata<MetadataOnlyEndpointMetadata>() is not null
+                var values = candidate.Endpoint.Metadata.GetMetadata<MetadataOnlyEndpointMetadata>() is null
                     ? candidate.Values
                     : null;
                 candidates.ReplaceEndpoint(i, cachedEndpoint, values);
@@ -107,6 +110,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             _endpointsCache.Add(activeEndpoint, replacementEndpoint);
 
             var values = actualCandidateCount == 1 ? actualCandidate.Values : null;
+
             candidates.ReplaceEndpoint(replacementCandidateIndex, replacementEndpoint, values);
             candidates.SetValidity(replacementCandidateIndex, true);
         }
