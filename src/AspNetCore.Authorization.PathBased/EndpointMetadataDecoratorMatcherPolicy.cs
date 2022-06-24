@@ -29,7 +29,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             if (_endpointsCache.TryGetValue(candidate.Endpoint, out var cachedEndpoint))
             {
                 // Only use the current request's route values if the candidate match is an actual endpoint
-                var values = candidate.Endpoint.Metadata.GetMetadata<MetadataOnlyEndpointMetadata>() is null
+                var values = candidate.Endpoint.RequestDelegate != NoOpRequestDelegate
                     ? candidate.Values
                     : null;
                 candidates.ReplaceEndpoint(i, cachedEndpoint, values);
@@ -47,7 +47,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
         {
             var candidate = candidates[i];
 
-            if (candidate.Endpoint.Metadata.GetMetadata<MetadataOnlyEndpointMetadata>() != null)
+            if (candidate.Endpoint.RequestDelegate == NoOpRequestDelegate)
             {
                 candidates.SetValidity(i, false);
                 policyEndpoints ??= new();
