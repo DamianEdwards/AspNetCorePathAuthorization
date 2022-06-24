@@ -18,10 +18,10 @@ public static class EndpointMetadataDecoratorsApplicationBuilderExtensions
     public static IEndpointConventionBuilder MapMetadata<T>(this T endpoints, string pattern, params object[] items)
         where T : IEndpointRouteBuilder
     {
-        var _ = endpoints.ServiceProvider.GetRequiredService<MatcherPolicyMetadata>();
+        var _ = endpoints.ServiceProvider.GetRequiredService<MetadataOnlyEndpointMetadata>();
 
-        return endpoints.Map(pattern, (ctx) => { return Task.CompletedTask; })
-            .WithMetadata(new MatcherPolicyMetadata())
+        return endpoints.Map(pattern, static (ctx) => { return Task.CompletedTask; })
+            .WithMetadata(new MetadataOnlyEndpointMetadata())
             .WithMetadata(items);
     }
 }

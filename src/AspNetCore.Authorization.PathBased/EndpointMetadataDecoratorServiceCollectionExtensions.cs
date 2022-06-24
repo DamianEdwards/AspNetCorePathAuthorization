@@ -13,7 +13,7 @@ public static class EndpointMetadataDecoratorServiceCollectionExtensions
     public static IServiceCollection AddEndpointMetadataDecorators(this IServiceCollection services)
     {
         // Add metadata so we can track if this method has been called
-        services.AddSingleton<MatcherPolicyMetadata>();
+        services.AddSingleton<MetadataOnlyEndpointMetadata>();
 
         return services.AddSingleton<MatcherPolicy, EndpointMetadataDecoratorMatcherPolicy>();
     }

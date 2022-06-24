@@ -14,7 +14,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
 
     public bool AppliesToEndpoints(IReadOnlyList<Endpoint> endpoints)
     {
-        return endpoints.Any(e => e.Metadata.GetMetadata<MatcherPolicyMetadata>() != null);
+        return endpoints.Any(e => e.Metadata.GetMetadata<MetadataOnlyEndpointMetadata>() != null);
     }
 
     public Task ApplyAsync(HttpContext httpContext, CandidateSet candidates)
@@ -25,13 +25,17 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             var candidate = candidates[i];
             if (_endpointsCache.TryGetValue(candidate.Endpoint, out var cachedEndpoint))
             {
-                candidates.ReplaceEndpoint(i, cachedEndpoint, candidate.Values);
+                // Only use the current request's route values if the candidate match is an actual endpoint
+                var values = candidate.Endpoint.Metadata.GetMetadata<MetadataOnlyEndpointMetadata>() is not null
+                    ? candidate.Values
+                    : null;
+                candidates.ReplaceEndpoint(i, cachedEndpoint, values);
                 return Task.CompletedTask;
             }
         }
 
-        // Not found in cache so build up the decorated endpoint
-        var policyEndpoints = new List<Endpoint>(candidates.Count);
+        // Not found in cache so build up the replacement endpoint
+        List<Endpoint>? policyEndpoints = null;
         CandidateState actualCandidate = default;
         var replacementCandidateIndex = -1;
         var actualCandidateCount = 0;
@@ -40,9 +44,10 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
         {
             var candidate = candidates[i];
 
-            if (candidate.Endpoint.Metadata.GetMetadata<MatcherPolicyMetadata>() != null)
+            if (candidate.Endpoint.Metadata.GetMetadata<MetadataOnlyEndpointMetadata>() != null)
             {
                 candidates.SetValidity(i, false);
+                policyEndpoints ??= new();
                 policyEndpoints.Add(candidate.Endpoint);
                 if (actualCandidateCount == 0)
                 {
@@ -57,7 +62,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             }
         }
 
-        Debug.Assert(policyEndpoints.Count >= 1);
+        Debug.Assert(policyEndpoints?.Count >= 1);
         Debug.Assert(replacementCandidateIndex >= 0);
 
         var activeEndpoint = actualCandidateCount switch
@@ -77,12 +82,14 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             {
                 var routeEndpointBuilder = new RouteEndpointBuilder(activeEndpoint.RequestDelegate!, activeEndpoint.RoutePattern, activeEndpoint.Order);
 
+                // Add metadata from metadata-only endpoint candidates
                 foreach (var metadata in decoratedMetadata)
                 {
                     routeEndpointBuilder.Metadata.Add(metadata);
                 }
 
-                foreach (var metadata in activeEndpoint.Metadata)
+                // Add metadata from actual candidate endpoint
+                foreach (var metadata in actualCandidate.Endpoint.Metadata)
                 {
                     if (metadata is not null)
                     {
@@ -108,7 +115,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
     }
 }
 
-internal class MatcherPolicyMetadata
+internal class MetadataOnlyEndpointMetadata
 {
 
 }
