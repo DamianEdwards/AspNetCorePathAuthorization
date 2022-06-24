@@ -43,8 +43,6 @@ app.UseAuthorization();
 
 app.UseStaticFiles();
 
-app.MapMetadata("/todos", new MyMetadata());
-
 app.RequireAuthorization("/test");
 app.MapGet("/test/sub", () => "This endpoint requires authorization");
 
