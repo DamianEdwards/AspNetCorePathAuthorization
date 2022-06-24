@@ -10,7 +10,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
 {
     private readonly ConditionalWeakTable<Endpoint, Endpoint> _endpointsCache = new();
 
-    public override int Order { get; }
+    public override int Order { get; } = 0;
 
     public bool AppliesToEndpoints(IReadOnlyList<Endpoint> endpoints)
     {
