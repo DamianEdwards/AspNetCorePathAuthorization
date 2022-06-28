@@ -43,6 +43,12 @@ app.UseAuthorization();
 
 app.UseStaticFiles();
 
+app.MapMetadata("/{**subpath}").WithMetadata(new { Whatever = "This is on every endpoint now!" });
+
+app.MapGet("/printmetadata", (HttpContext context) => context.GetEndpoint()?.Metadata
+    .Select(m => new { TypeName = m.GetType().FullName, Value = m.ToString() }))
+    .WithMetadata(new { Value = "This is only on this single endpoint" });
+
 app.RequireAuthorization("/test");
 app.MapGet("/test/sub", () => "This endpoint requires authorization");
 
