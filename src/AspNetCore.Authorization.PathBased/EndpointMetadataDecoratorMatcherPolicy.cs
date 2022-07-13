@@ -35,6 +35,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
 
         // Fallback to looping through all candiates
         Endpoint? firstMetadataOnlyEndpoint = null;
+        // PERF: Use a list type optimized for small item counts instead
         List<Endpoint>? metadataOnlyEndpoints = null;
         var replacementCandidateIndex = -1;
         var realEndpointCandidateCount = 0;
@@ -60,7 +61,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
                 }
                 if (realEndpointCandidateCount == 0 && replacementCandidateIndex == -1)
                 {
-                    // Only capture index of first endpoint as candidate replacement
+                    // Only capture index of first metadata only endpoint as candidate replacement
                     replacementCandidateIndex = i;
                 }
             }
