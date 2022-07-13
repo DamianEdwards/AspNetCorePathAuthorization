@@ -34,6 +34,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
         }
 
         // Fallback to looping through all candiates
+        Endpoint? firstMetadataOnlyEndpoint = null;
         List<Endpoint>? metadataOnlyEndpoints = null;
         var replacementCandidateIndex = -1;
         var realEndpointCandidateCount = 0;
@@ -44,8 +45,19 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
 
             if (MetadataOnlyEndpoint.IsMetadataOnlyEndpoint(candidate.Endpoint))
             {
-                metadataOnlyEndpoints ??= new();
-                metadataOnlyEndpoints.Add(candidate.Endpoint);
+                if (firstMetadataOnlyEndpoint is null)
+                {
+                    firstMetadataOnlyEndpoint = candidate.Endpoint;
+                }
+                else
+                {
+                    if (metadataOnlyEndpoints is null)
+                    {
+                        metadataOnlyEndpoints = new List<Endpoint>();
+                        metadataOnlyEndpoints.Add(firstMetadataOnlyEndpoint);
+                    }
+                    metadataOnlyEndpoints.Add(candidate.Endpoint);
+                }
                 if (realEndpointCandidateCount == 0 && replacementCandidateIndex == -1)
                 {
                     // Only capture index of first endpoint as candidate replacement
@@ -63,7 +75,8 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             }
         }
 
-        Debug.Assert(metadataOnlyEndpoints?.Count >= 1);
+        Debug.Assert(firstMetadataOnlyEndpoint is not null);
+        Debug.Assert(metadataOnlyEndpoints?.Count >= 1 || firstMetadataOnlyEndpoint is not null);
         Debug.Assert(replacementCandidateIndex >= 0);
 
         var activeCandidate = candidates[replacementCandidateIndex];
@@ -79,7 +92,9 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             if (!_endpointsCache.TryGetValue(activeEndpoint, out replacementEndpoint))
             {
                 // Not found in cache so build up the replacement endpoint
-                var decoratedMetadata = metadataOnlyEndpoints.SelectMany(e => e.Metadata).ToList();
+                IReadOnlyList<object> decoratedMetadata = metadataOnlyEndpoints is not null
+                    ? metadataOnlyEndpoints.SelectMany(e => e.Metadata).ToList()
+                    : firstMetadataOnlyEndpoint.Metadata;
 
                 if (realEndpointCandidateCount == 1)
                 {

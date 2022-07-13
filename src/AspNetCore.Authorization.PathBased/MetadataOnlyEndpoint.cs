@@ -12,7 +12,7 @@ internal class MetadataOnlyEndpoint : Endpoint
 
     }
 
-    public MetadataOnlyEndpoint(Endpoint endpoint, IList<object> metadata)
+    public MetadataOnlyEndpoint(Endpoint endpoint, IReadOnlyList<object> metadata)
         : base(null, new(endpoint.Metadata.Union(metadata)), GetDisplayName(endpoint))
     {
 
