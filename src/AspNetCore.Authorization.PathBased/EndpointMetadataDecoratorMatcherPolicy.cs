@@ -116,7 +116,7 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
             }
             var values = realEndpointCandidateCount == 1 ? activeCandidate.Values : null;
 
-            // Replace the endpoint and ensure it's marked as valid
+            // Replace the endpoint
             candidates.ReplaceEndpoint(replacementCandidateIndex, replacementEndpoint, values);
         }
 
