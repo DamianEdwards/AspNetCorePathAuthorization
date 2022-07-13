@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.VisualBasic;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,7 +41,7 @@ app.UseAuthorization();
 //    options.AuthorizePath("/admin", "AdminsOnly");
 //});
 
-app.UseStaticFiles();
+app.UseStaticFiles(ConfigureStaticFiles());
 
 app.MapMetadata("/{**subpath}").WithMetadata(new { Whatever = "This is on every endpoint now!" });
 
@@ -68,3 +68,18 @@ app.MapGet("/admin", () => $"Admin portal");
 app.MapGet("/admin/{action}", (string action) => $"Only admins can {action} and you're an admin so you can {action}.");
 
 app.Run();
+
+StaticFileOptions ConfigureStaticFiles() =>
+    new StaticFileOptions
+    {
+        OnPrepareResponse = ctx =>
+        {
+            var endpoint = ctx.Context.GetEndpoint();
+            // Ensure response isn't cached if endpoint requires authorization
+            if (endpoint?.Metadata.GetMetadata<IAuthorizeData>() is { }
+                && endpoint?.Metadata.GetMetadata<IAllowAnonymous>() is null)
+            {
+                ctx.Context.Response.Headers.CacheControl = "must-revalidate";
+            }
+        }
+    };

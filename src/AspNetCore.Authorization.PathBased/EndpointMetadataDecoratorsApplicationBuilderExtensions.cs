@@ -29,7 +29,7 @@ public static class EndpointMetadataDecoratorsApplicationBuilderExtensions
                                                 "Make sure IServiceCollection.AddEndpointMetadataDecorators() was called during app startup.");
         }
 
-        return endpoints.Map(pattern, EndpointMetadataDecoratorMatcherPolicy.NoOpRequestDelegate)
+        return endpoints.Map(pattern, MetadataOnlyEndpoint.NoOpRequestDelegate)
             .WithMetadata(new MetadataOnlyEndpointMetadata())
             .WithMetadata(items);
     }

@@ -1,7 +1,6 @@
-﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.Extensions.Options;
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using System.Text.Encodings.Web;
+using Microsoft.Extensions.Options;
 
 namespace Microsoft.AspNetCore.Authentication;
 
@@ -21,7 +20,7 @@ public class QueryAuthScheme : AuthenticationHandler<AuthenticationSchemeOptions
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var nameQuery = Context.Request.Query["name"];
-        if (nameQuery.Count == 0)
+        if (nameQuery == Extensions.Primitives.StringValues.Empty || string.IsNullOrEmpty(nameQuery))
         {
             return Task.FromResult(AuthenticateResult.Fail("No user name provided in querystring (?name=)"));
         }

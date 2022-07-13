@@ -10,129 +10,114 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
 {
     private readonly ConditionalWeakTable<Endpoint, Endpoint> _endpointsCache = new();
 
-    internal static readonly RequestDelegate NoOpRequestDelegate = (ctx) => Task.CompletedTask;
-
     public override int Order { get; }
 
     public bool AppliesToEndpoints(IReadOnlyList<Endpoint> endpoints)
     {
-        return endpoints.Any(e => ReferenceEquals(e.RequestDelegate, NoOpRequestDelegate)
-            && e.Metadata.GetMetadata<MetadataOnlyEndpointMetadata>() != null);
+        return endpoints.Any(e => MetadataOnlyEndpoint.IsMetadataOnlyEndpoint(e)
+            && e.Metadata.GetMetadata<MetadataOnlyEndpointMetadata>() is not null);
     }
 
     public Task ApplyAsync(HttpContext httpContext, CandidateSet candidates)
     {
+        // Try to find cache entry for single candidate
         var firstCandidate = candidates[0];
         Endpoint? cachedEndpoint;
-        // Try to find cache entry for first candidate
-        if (_endpointsCache.TryGetValue(firstCandidate.Endpoint, out cachedEndpoint))
+        if (candidates.Count == 1 && _endpointsCache.TryGetValue(firstCandidate.Endpoint, out cachedEndpoint))
         {
             // Only use the current request's route values if the candidate match is an actual endpoint
-            var values = !ReferenceEquals(firstCandidate.Endpoint.RequestDelegate, NoOpRequestDelegate)
+            var values = !MetadataOnlyEndpoint.IsMetadataOnlyEndpoint(firstCandidate.Endpoint)
                 ? firstCandidate.Values
                 : null;
             candidates.ReplaceEndpoint(0, cachedEndpoint, values);
             return Task.CompletedTask;
         }
 
-        // Fallback to looping through remaining candiates
-        for (int i = 1; i < candidates.Count; i++)
-        {
-            var candidate = candidates[i];
-            if (_endpointsCache.TryGetValue(candidate.Endpoint, out cachedEndpoint))
-            {
-                // Only use the current request's route values if the candidate match is an actual endpoint
-                var values = !ReferenceEquals(candidate.Endpoint.RequestDelegate, NoOpRequestDelegate)
-                    ? candidate.Values
-                    : null;
-                candidates.ReplaceEndpoint(i, cachedEndpoint, values);
-                return Task.CompletedTask;
-            }
-        }
-
-        // Not found in cache so build up the replacement endpoint
+        // Fallback to looping through all candiates
         List<Endpoint>? metadataOnlyEndpoints = null;
-        CandidateState actualCandidate = default;
         var replacementCandidateIndex = -1;
-        var actualCandidateCount = 0;
+        var realEndpointCandidateCount = 0;
 
         for (int i = 0; i < candidates.Count; i++)
         {
             var candidate = candidates[i];
 
-            if (ReferenceEquals(candidate.Endpoint.RequestDelegate, NoOpRequestDelegate))
+            if (MetadataOnlyEndpoint.IsMetadataOnlyEndpoint(candidate.Endpoint))
             {
                 metadataOnlyEndpoints ??= new();
                 metadataOnlyEndpoints.Add(candidate.Endpoint);
-                if (actualCandidateCount == 0)
+                if (realEndpointCandidateCount == 0 && replacementCandidateIndex == -1)
                 {
+                    // Only capture index of first endpoint as candidate replacement
                     replacementCandidateIndex = i;
-
-                    // TODO: Review necessisty of setting candidate validity (doesn't seem to matter?)
-                    //if (i < (candidates.Count - 1))
-                    //{
-                    //    candidates.SetValidity(i, false);
-                    //}
                 }
             }
             else
             {
-                actualCandidate = candidate;
-                replacementCandidateIndex = i;
-                actualCandidateCount++;
+                realEndpointCandidateCount++;
+                if (realEndpointCandidateCount == 1)
+                {
+                    // Only first real endpoint is a candidate
+                    replacementCandidateIndex = i;
+                }
             }
         }
 
         Debug.Assert(metadataOnlyEndpoints?.Count >= 1);
         Debug.Assert(replacementCandidateIndex >= 0);
 
-        var activeEndpoint = actualCandidateCount switch
-        {
-            1 => (RouteEndpoint)actualCandidate.Endpoint,
-            0 => (RouteEndpoint)candidates[replacementCandidateIndex].Endpoint,
-            _ => null
-        };
+        var activeCandidate = candidates[replacementCandidateIndex];
+        var activeEndpoint = (RouteEndpoint)activeCandidate.Endpoint;
 
-        // TODO: Review what the correct behavior is if there is more than 1 actual candidate
+        // TODO: Review what the correct behavior is if there is more than 1 real endpoint candidate.
 
-        if (activeEndpoint is not null)
+        if (realEndpointCandidateCount is 0 or 1 && activeEndpoint is not null)
         {
             Endpoint? replacementEndpoint = null;
 
-            var decoratedMetadata = metadataOnlyEndpoints.SelectMany(e => e.Metadata).ToList();
-
-            if (actualCandidateCount == 1)
+            // Check cache for replacement endpoint
+            if (!_endpointsCache.TryGetValue(activeEndpoint, out replacementEndpoint))
             {
-                var routeEndpointBuilder = new RouteEndpointBuilder(activeEndpoint.RequestDelegate!, activeEndpoint.RoutePattern, activeEndpoint.Order);
+                // Not found in cache so build up the replacement endpoint
+                var decoratedMetadata = metadataOnlyEndpoints.SelectMany(e => e.Metadata).ToList();
 
-                // Add metadata from metadata-only endpoint candidates
-                foreach (var metadata in decoratedMetadata)
+                if (realEndpointCandidateCount == 1)
                 {
-                    routeEndpointBuilder.Metadata.Add(metadata);
-                }
+                    var routeEndpointBuilder = new RouteEndpointBuilder(activeEndpoint.RequestDelegate!, activeEndpoint.RoutePattern, activeEndpoint.Order);
 
-                // Add metadata from actual candidate endpoint
-                foreach (var metadata in actualCandidate.Endpoint.Metadata)
-                {
-                    if (metadata is not null)
+                    routeEndpointBuilder.DisplayName = activeEndpoint.DisplayName;
+
+                    // Add metadata from metadata-only endpoint candidates
+                    foreach (var metadata in decoratedMetadata)
                     {
                         routeEndpointBuilder.Metadata.Add(metadata);
                     }
+
+                    // Add metadata from active endpoint
+                    if (realEndpointCandidateCount > 0)
+                    {
+                        foreach (var metadata in activeEndpoint.Metadata)
+                        {
+                            if (metadata is not null)
+                            {
+                                routeEndpointBuilder.Metadata.Add(metadata);
+                            }
+                        }
+                    }
+
+                    replacementEndpoint = routeEndpointBuilder.Build();
+                }
+                else
+                {
+                    replacementEndpoint = new MetadataOnlyEndpoint(activeEndpoint, decoratedMetadata);
                 }
 
-                replacementEndpoint = routeEndpointBuilder.Build();
+                _endpointsCache.Add(activeEndpoint, replacementEndpoint);
             }
-            else
-            {
-                replacementEndpoint = new MetadataOnlyEndpoint(activeEndpoint, decoratedMetadata);
-            }
+            var values = realEndpointCandidateCount == 1 ? activeCandidate.Values : null;
 
-            _endpointsCache.Add(activeEndpoint, replacementEndpoint);
-
-            var values = actualCandidateCount == 1 ? actualCandidate.Values : null;
-
+            // Replace the endpoint and ensure it's marked as valid
             candidates.ReplaceEndpoint(replacementCandidateIndex, replacementEndpoint, values);
-            //candidates.SetValidity(replacementCandidateIndex, true);
         }
 
         return Task.CompletedTask;
