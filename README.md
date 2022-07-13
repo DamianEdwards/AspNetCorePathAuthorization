@@ -69,8 +69,8 @@ app.MapGet("/admin/{action}", (string action) => $"Only admins can {action} and 
 
 - This adds metadata to existing endpoints in the application's route tree so path matching is performed as part of normal routing meaning no extra perf hit per request!
 - The authorization is performed by the usual authorization middleware, there's no custom middleware involved, so the normal rules with regards to authorization policy combination, authentication scheme selection, controlling the authorization result behavior, etc. apply
-- The underlying mechanism to decorate endpoints with extra metadata is completely reusable and could enable other endpoint-aware middleware (e.g. output caching) to work with non-endpoint aware middleware (e.g. static files).
-- See [this announcement on the ASP.NET Core repo](https://github.com/aspnet/Announcements/issues/488) for more details about a change in .NET 7 that will enable this approach to work well with the existing file-serving middleware in ASP.NET Core.
+- The underlying mechanism to decorate endpoints with extra metadata is completely reusable and could enable other endpoint-aware middleware (e.g. [Output Caching](https://devblogs.microsoft.com/dotnet/asp-net-core-updates-in-dotnet-7-preview-6/#output-caching-middleware)) to work with non-endpoint aware middleware (e.g. static files).
+- See [this announcement on the ASP.NET Core repo](https://github.com/aspnet/Announcements/issues/488) for more details about a change in .NET 7 that will enable this approach to work well with the existing file-serving middleware in ASP.NET Core (from preview.7). Grab the latest preview SDK build from the [Installer repo](https://github.com/dotnet/installer#table) if you want to try this out.
 
 ## Sample app & authentication
 
