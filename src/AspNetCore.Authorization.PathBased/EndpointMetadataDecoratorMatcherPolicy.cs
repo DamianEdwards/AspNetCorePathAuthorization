@@ -139,8 +139,3 @@ internal class EndpointMetadataDecoratorMatcherPolicy : MatcherPolicy, IEndpoint
         return Task.CompletedTask;
     }
 }
-
-internal class MetadataOnlyEndpointMetadata
-{
-
-}
