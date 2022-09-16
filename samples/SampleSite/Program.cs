@@ -69,8 +69,7 @@ app.MapGet("/admin/{action}", (string action) => $"Only admins can {action} and 
 
 app.Run();
 
-StaticFileOptions ConfigureStaticFiles() =>
-    new StaticFileOptions
+StaticFileOptions ConfigureStaticFiles() => new ()
     {
         OnPrepareResponse = ctx =>
         {

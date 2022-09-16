@@ -20,7 +20,7 @@ public class QueryAuthScheme : AuthenticationHandler<AuthenticationSchemeOptions
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var nameQuery = Context.Request.Query["name"];
-        if (nameQuery == Extensions.Primitives.StringValues.Empty || string.IsNullOrEmpty(nameQuery))
+        if (string.IsNullOrEmpty(nameQuery) || nameQuery == Extensions.Primitives.StringValues.Empty)
         {
             return Task.FromResult(AuthenticateResult.Fail("No user name provided in querystring (?name=)"));
         }
